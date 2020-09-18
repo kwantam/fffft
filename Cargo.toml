@@ -1,0 +1,16 @@
+[package]
+name = "fffft"
+version = "0.1.0"
+authors = ["kwantam <kwantam@gmail.com>"]
+edition = "2018"
+description = "Number theoretic transform for PrimeField types (from ff crate)"
+license = "Apache-2.0"
+repository = "https://github.com/kwantam/fffft"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ff = "0.8"
+
+[dev-dependencies]
+ff_derive = "0.8"
