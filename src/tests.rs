@@ -45,7 +45,7 @@ fn simple() {
     use ft::*;
     use rug::Integer;
 
-    let mut rug_input: Vec<Integer> = vec![1, 9, 13, 2].into_iter().map(Integer::from).collect();
+    let mut rug_input: Vec<Integer> = vec![1, 9, 13, 2, 7, 5, 4, 8].into_iter().map(Integer::from).collect();
 
     let mut input: Vec<Ft> = rug_input
         .iter()
@@ -65,8 +65,12 @@ fn simple() {
     };
 
     rug_fft::naive_ntt(rug_input.as_mut(), &p, &w);
-    Ft::fft_i_o(&mut input).unwrap();
+    Ft::fft_i(&mut input).unwrap();
 
-    println!("{:?}", input);
-    println!("{:?}", rug_input);
+    let rug_output: Vec<Ft> = rug_input
+        .iter()
+        .map(|x| Ft::from_str(&x.to_string_radix(10)).unwrap())
+        .collect();
+
+    assert_eq!(rug_output, input);
 }
