@@ -18,6 +18,7 @@ itertools = "0.9"
 bitvec = "0.18"
 byteorder = "1"
 ff = { version = "0.8", path = "../ff", features = ["derive"] }
+rand = "0.7"
 rand_core = "0.5"
 rug = "1"
 rug-fft = "0.1"

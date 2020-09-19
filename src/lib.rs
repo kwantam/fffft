@@ -45,22 +45,32 @@ pub trait FieldFFT: Field {
 
     /// fft: in-order input, in-order result
     fn fft_ii<T: AsMut<[Self]>>(mut xi: T) -> Result<(), FFTError> {
-        fft_help(xi.as_mut(), true)
+        fft_help(xi.as_mut(), FFTOrder::II)
     }
 
     /// fft: in-order input, out-of-order result
     fn fft_io<T: AsMut<[Self]>>(mut xi: T) -> Result<(), FFTError> {
-        fft_help(xi.as_mut(), false)
+        fft_help(xi.as_mut(), FFTOrder::IO)
+    }
+
+    /// fft: out-of-order input, in-order result
+    fn fft_oi<T: AsMut<[Self]>>(mut xi: T) -> Result<(), FFTError> {
+        fft_help(xi.as_mut(), FFTOrder::OI)
     }
 
     /// ifft: in-order input, in-order result
     fn ifft_ii<T: AsMut<[Self]>>(mut xi: T) -> Result<(), FFTError> {
-        ifft_help(xi.as_mut(), true)
+        ifft_help(xi.as_mut(), FFTOrder::II)
+    }
+
+    /// ifft: in-order input, out-of-order result
+    fn ifft_io<T: AsMut<[Self]>>(mut xi: T) -> Result<(), FFTError> {
+        ifft_help(xi.as_mut(), FFTOrder::IO)
     }
 
     /// ifft: out-of-order input, in-order result
     fn ifft_oi<T: AsMut<[Self]>>(mut xi: T) -> Result<(), FFTError> {
-        ifft_help(xi.as_mut(), false)
+        ifft_help(xi.as_mut(), FFTOrder::OI)
     }
 }
 
@@ -72,21 +82,48 @@ impl<T: ff::PrimeField> FieldFFT for T {
     }
 }
 
-fn fft_help<T: FieldFFT>(xi: &mut [T], inorder: bool) -> Result<(), FFTError> {
+#[derive(PartialEq, Eq, Debug)]
+enum FFTOrder {
+    II,
+    IO,
+    OI,
+}
+
+fn fft_help<T: FieldFFT>(xi: &mut [T], ord: FFTOrder) -> Result<(), FFTError> {
+    use FFTOrder::*;
+
     let log_len = get_log_len(xi, T::S)?;
-    io_help(xi, T::root_of_unity(), log_len, T::S);
-    if inorder {
+    let root_of_unity = T::root_of_unity();
+
+    if ord == OI {
+        oi_help(xi, root_of_unity, log_len, T::S);
+    } else {
+        io_help(xi, root_of_unity, log_len, T::S);
+    }
+
+    if ord == II {
         derange(xi, log_len);
     }
+
     Ok(())
 }
 
-fn ifft_help<T: FieldFFT>(xi: &mut [T], inorder: bool) -> Result<(), FFTError> {
+fn ifft_help<T: FieldFFT>(xi: &mut [T], ord: FFTOrder) -> Result<(), FFTError> {
+    use FFTOrder::*;
+
     let log_len = get_log_len(xi, T::S)?;
-    if inorder {
+    let root_of_unity = T::root_of_unity().invert().unwrap();
+
+    if ord == II {
         derange(xi, log_len);
     }
-    oi_help(xi, T::root_of_unity().invert().unwrap(), log_len, T::S);
+
+    if ord == IO {
+        io_help(xi, root_of_unity, log_len, T::S);
+    } else {
+        oi_help(xi, root_of_unity, log_len, T::S);
+    }
+
     divide_by_n(xi, log_len);
     Ok(())
 }

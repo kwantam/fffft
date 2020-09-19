@@ -43,12 +43,14 @@ mod ft2 {
 #[test]
 fn rug_check() {
     use ft::*;
+    use rand::seq::SliceRandom;
     use rug::Integer;
 
-    let mut rug_input: Vec<Integer> = vec![1, 9, 13, 2, 7, 5, 4, 8]
-        .into_iter()
-        .map(Integer::from)
-        .collect();
+    let mut input = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+    input.shuffle(&mut rand::thread_rng());
+    input.truncate(1 << (1 + (rand::random::<u8>() % 4)));
+
+    let mut rug_input: Vec<Integer> = input.into_iter().map(Integer::from).collect();
 
     let mut input: Vec<Ft> = rug_input
         .iter()
@@ -81,8 +83,12 @@ fn rug_check() {
 #[test]
 fn roundtrip() {
     use ft::*;
+    use rand::seq::SliceRandom;
 
-    let input = vec![1, 7, 4, 8, 9, 16, 2, 11];
+    let mut input = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+    input.shuffle(&mut rand::thread_rng());
+    input.truncate(1 << (1 + (rand::random::<u8>() % 4)));
+
     let mut fi: Vec<Ft> = input
         .iter()
         .map(|x| {
@@ -93,25 +99,121 @@ fn roundtrip() {
     let fi2 = fi.clone();
     let log_len = super::get_log_len(&fi, <Ft as FieldFFT>::S).unwrap();
 
-    // in-order to in-order roundtrip
+    // fft_ii tests
     Ft::fft_ii(&mut fi).unwrap();
     Ft::ifft_ii(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 
-    // out-of-order to out-of-order roundtrip --- no derangement needed
-    Ft::fft_io(&mut fi).unwrap();
-    Ft::ifft_oi(&mut fi).unwrap();
-    assert_eq!(fi, fi2);
-
-    // in-order fft, derange, out-of-order ifft
     Ft::fft_ii(&mut fi).unwrap();
     super::derange(&mut fi, log_len);
     Ft::ifft_oi(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 
-    // out-of-order fft, derange, in-order ifft
+    Ft::fft_ii(&mut fi).unwrap();
+    Ft::ifft_io(&mut fi).unwrap();
+    super::derange(&mut fi, log_len);
+    assert_eq!(fi, fi2);
+
+    // fft_io tests
     Ft::fft_io(&mut fi).unwrap();
     super::derange(&mut fi, log_len);
     Ft::ifft_ii(&mut fi).unwrap();
+    assert_eq!(fi, fi2);
+
+    Ft::fft_io(&mut fi).unwrap();
+    Ft::ifft_oi(&mut fi).unwrap();
+    assert_eq!(fi, fi2);
+
+    Ft::fft_io(&mut fi).unwrap();
+    super::derange(&mut fi, log_len);
+    Ft::ifft_io(&mut fi).unwrap();
+    super::derange(&mut fi, log_len);
+    assert_eq!(fi, fi2);
+
+    // fft_oi tests
+    super::derange(&mut fi, log_len);
+    Ft::fft_oi(&mut fi).unwrap();
+    Ft::ifft_ii(&mut fi).unwrap();
+    assert_eq!(fi, fi2);
+
+    super::derange(&mut fi, log_len);
+    Ft::fft_oi(&mut fi).unwrap();
+    super::derange(&mut fi, log_len);
+    Ft::ifft_oi(&mut fi).unwrap();
+    assert_eq!(fi, fi2);
+
+    super::derange(&mut fi, log_len);
+    Ft::fft_oi(&mut fi).unwrap();
+    Ft::ifft_io(&mut fi).unwrap();
+    super::derange(&mut fi, log_len);
+    assert_eq!(fi, fi2);
+}
+
+#[test]
+fn rev_roundtrip() {
+    use ft::*;
+    use rand::seq::SliceRandom;
+
+    let mut input = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+    input.shuffle(&mut rand::thread_rng());
+    input.truncate(1 << (1 + (rand::random::<u8>() % 4)));
+
+    let mut fi: Vec<Ft> = input
+        .iter()
+        .map(|x| {
+            let sx = format!("{}", x);
+            Ft::from_str(&sx).unwrap()
+        })
+        .collect();
+    let fi2 = fi.clone();
+    let log_len = super::get_log_len(&fi, <Ft as FieldFFT>::S).unwrap();
+
+    // ifft_ii tests
+    Ft::ifft_ii(&mut fi).unwrap();
+    Ft::fft_ii(&mut fi).unwrap();
+    assert_eq!(fi, fi2);
+
+    Ft::ifft_ii(&mut fi).unwrap();
+    Ft::fft_io(&mut fi).unwrap();
+    super::derange(&mut fi, log_len);
+    assert_eq!(fi, fi2);
+
+    Ft::ifft_ii(&mut fi).unwrap();
+    super::derange(&mut fi, log_len);
+    Ft::fft_oi(&mut fi).unwrap();
+    assert_eq!(fi, fi2);
+
+    // ifft_io tests
+    Ft::ifft_io(&mut fi).unwrap();
+    super::derange(&mut fi, log_len);
+    Ft::fft_ii(&mut fi).unwrap();
+    assert_eq!(fi, fi2);
+
+    Ft::ifft_io(&mut fi).unwrap();
+    super::derange(&mut fi, log_len);
+    Ft::fft_io(&mut fi).unwrap();
+    super::derange(&mut fi, log_len);
+    assert_eq!(fi, fi2);
+
+    Ft::ifft_io(&mut fi).unwrap();
+    Ft::fft_oi(&mut fi).unwrap();
+    assert_eq!(fi, fi2);
+
+    // ifft_oi tests
+    super::derange(&mut fi, log_len);
+    Ft::ifft_oi(&mut fi).unwrap();
+    Ft::fft_ii(&mut fi).unwrap();
+    assert_eq!(fi, fi2);
+
+    super::derange(&mut fi, log_len);
+    Ft::ifft_oi(&mut fi).unwrap();
+    Ft::fft_io(&mut fi).unwrap();
+    super::derange(&mut fi, log_len);
+    assert_eq!(fi, fi2);
+
+    super::derange(&mut fi, log_len);
+    Ft::ifft_oi(&mut fi).unwrap();
+    super::derange(&mut fi, log_len);
+    Ft::fft_oi(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 }
