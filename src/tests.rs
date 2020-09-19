@@ -45,7 +45,10 @@ fn simple() {
     use ft::*;
     use rug::Integer;
 
-    let mut rug_input: Vec<Integer> = vec![1, 9, 13, 2, 7, 5, 4, 8].into_iter().map(Integer::from).collect();
+    let mut rug_input: Vec<Integer> = vec![1, 9, 13, 2, 7, 5, 4, 8]
+        .into_iter()
+        .map(Integer::from)
+        .collect();
 
     let mut input: Vec<Ft> = rug_input
         .iter()
@@ -73,4 +76,24 @@ fn simple() {
         .collect();
 
     assert_eq!(rug_output, input);
+}
+
+#[test]
+fn roundtrip() {
+    use ft::*;
+
+    let input = vec![1, 7, 4, 8, 9, 16, 2, 11];
+    let mut fi: Vec<Ft> = input
+        .iter()
+        .map(|x| {
+            let sx = format!("{}", x);
+            Ft::from_str(&sx).unwrap()
+        })
+        .collect();
+    let fi2 = fi.clone();
+
+    Ft::fft_i(&mut fi).unwrap();
+    Ft::ifft_i(&mut fi).unwrap();
+
+    assert_eq!(fi, fi2);
 }

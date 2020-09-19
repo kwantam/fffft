@@ -43,57 +43,47 @@ pub trait FieldFFT: Field {
     /// Returns a 2^S'th root of unity.
     fn root_of_unity() -> Self;
 
-    /// in-place fft, out of order result
+    /// in-place fft, out-of-order result
     fn fft_i_o<T: AsMut<[Self]>>(mut xi: T) -> Result<(), FFTError> {
         let xi = xi.as_mut();
         let log_len = get_log_len(xi, <Self as FieldFFT>::S)?;
-
-        // compute the needed roots of unity
-        let mut gap = xi.len() / 2;
-        let roots_of_unity: Vec<Self> = {
-            let mut root_of_unity = <Self as FieldFFT>::root_of_unity();
-            for _ in 0..(<Self as FieldFFT>::S - log_len) {
-                root_of_unity *= root_of_unity;
-            }
-            iterate(Self::one(), |&v| v * root_of_unity)
-                .take(gap)
-                .collect()
-        };
-
-        while gap > 0 {
-            let nchunks = xi.len() / (2 * gap);
-            for cidx in 0..nchunks {
-                let offset = 2 * cidx * gap;
-                for idx in 0..gap {
-                    let neg = xi[offset + idx] - xi[offset + idx + gap];
-                    xi[offset + idx] += xi[offset + idx + gap];
-                    xi[offset + idx + gap] = neg * roots_of_unity[nchunks * idx];
-                }
-            }
-            gap /= 2;
-        }
-
+        fft_help(xi, log_len, <Self as FieldFFT>::root_of_unity());
         Ok(())
     }
 
     /// in-place fft, in-order result
     fn fft_i<T: AsMut<[Self]>>(mut xi: T) -> Result<(), FFTError> {
-        Self::fft_i_o(xi.as_mut())?;
-        Self::derange(xi.as_mut())
-    }
-
-    /// out-of-order to in-order via bit reversal
-    fn derange<T: AsMut<[Self]>>(mut xi: T) -> Result<(), FFTError> {
         let xi = xi.as_mut();
         let log_len = get_log_len(xi, <Self as FieldFFT>::S)?;
+        fft_help(xi, log_len, <Self as FieldFFT>::root_of_unity());
+        derange(xi, log_len);
+        Ok(())
+    }
 
-        for idx in 1..(xi.len() as u64 - 1) {
-            let ridx = bitrev(idx, log_len);
-            if idx < ridx {
-                xi.swap(idx as usize, ridx as usize);
-            }
-        }
+    /// in-place ifft, out-of-order result
+    fn ifft_i_o<T: AsMut<[Self]>>(mut xi: T) -> Result<(), FFTError> {
+        let xi = xi.as_mut();
+        let log_len = get_log_len(xi, <Self as FieldFFT>::S)?;
+        fft_help(
+            xi,
+            log_len,
+            <Self as FieldFFT>::root_of_unity().invert().unwrap(),
+        );
+        divide_by_n(xi, log_len);
+        Ok(())
+    }
 
+    /// in-place ifft, in-order result
+    fn ifft_i<T: AsMut<[Self]>>(mut xi: T) -> Result<(), FFTError> {
+        let xi = xi.as_mut();
+        let log_len = get_log_len(xi, <Self as FieldFFT>::S)?;
+        fft_help(
+            xi,
+            log_len,
+            <Self as FieldFFT>::root_of_unity().invert().unwrap(),
+        );
+        divide_by_n(xi, log_len);
+        derange(xi, log_len);
         Ok(())
     }
 }
@@ -119,6 +109,52 @@ fn get_log_len<T>(xi: &[T], s: u32) -> Result<u32, FFTError> {
     }
 
     Ok(log_len)
+}
+
+fn fft_help<T: FieldFFT>(xi: &mut [T], log_len: u32, mut root: T) {
+    // compute the needed roots of unity
+    let mut gap = xi.len() / 2;
+    let roots_of_unity: Vec<T> = {
+        for _ in 0..(<T as FieldFFT>::S - log_len) {
+            root *= root;
+        }
+        iterate(T::one(), |&v| v * root).take(gap).collect()
+    };
+
+    while gap > 0 {
+        let nchunks = xi.len() / (2 * gap);
+        for cidx in 0..nchunks {
+            let offset = 2 * cidx * gap;
+            for idx in 0..gap {
+                let neg = xi[offset + idx] - xi[offset + idx + gap];
+                xi[offset + idx] += xi[offset + idx + gap];
+                xi[offset + idx + gap] = neg * roots_of_unity[nchunks * idx];
+            }
+        }
+        gap /= 2;
+    }
+}
+
+fn derange<T>(xi: &mut [T], log_len: u32) {
+    for idx in 1..(xi.len() as u64 - 1) {
+        let ridx = bitrev(idx, log_len);
+        if idx < ridx {
+            xi.swap(idx as usize, ridx as usize);
+        }
+    }
+}
+
+fn divide_by_n<T: Field>(xi: &mut [T], log_len: u32) {
+    let n_inv = {
+        let mut tmp = <T as Field>::one();
+        for _ in 0..log_len {
+            tmp = tmp.double();
+        }
+        tmp.invert().unwrap()
+    };
+    for x in xi {
+        x.mul_assign(&n_inv);
+    }
 }
 
 impl<T: ff::PrimeField> FieldFFT for T {
