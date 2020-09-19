@@ -41,7 +41,7 @@ mod ft2 {
 */
 
 #[test]
-fn simple() {
+fn rug_check() {
     use ft::*;
     use rug::Integer;
 
@@ -68,7 +68,7 @@ fn simple() {
     };
 
     rug_fft::naive_ntt(rug_input.as_mut(), &p, &w);
-    Ft::fft_i(&mut input).unwrap();
+    Ft::fft_ii(&mut input).unwrap();
 
     let rug_output: Vec<Ft> = rug_input
         .iter()
@@ -91,9 +91,27 @@ fn roundtrip() {
         })
         .collect();
     let fi2 = fi.clone();
+    let log_len = super::get_log_len(&fi, <Ft as FieldFFT>::S).unwrap();
 
-    Ft::fft_i(&mut fi).unwrap();
-    Ft::ifft_i(&mut fi).unwrap();
+    // in-order to in-order roundtrip
+    Ft::fft_ii(&mut fi).unwrap();
+    Ft::ifft_ii(&mut fi).unwrap();
+    assert_eq!(fi, fi2);
 
+    // out-of-order to out-of-order roundtrip --- no derangement needed
+    Ft::fft_io(&mut fi).unwrap();
+    Ft::ifft_oi(&mut fi).unwrap();
+    assert_eq!(fi, fi2);
+
+    // in-order fft, derange, out-of-order ifft
+    Ft::fft_ii(&mut fi).unwrap();
+    super::derange(&mut fi, log_len);
+    Ft::ifft_oi(&mut fi).unwrap();
+    assert_eq!(fi, fi2);
+
+    // out-of-order fft, derange, in-order ifft
+    Ft::fft_io(&mut fi).unwrap();
+    super::derange(&mut fi, log_len);
+    Ft::ifft_ii(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 }
