@@ -16,6 +16,9 @@ for sequences of values that implement the [ff::PrimeField] trait.
 use err_derive::Error;
 use itertools::iterate;
 
+#[cfg(test)]
+mod tests;
+
 /// Err variant from FFT functions
 #[derive(Debug, Error)]
 pub enum FFTError {
@@ -56,10 +59,15 @@ pub trait FieldFFT: ff::Field {
 
         // compute the needed roots of unity
         let mut gap = xi.len() / 2;
-        let roots_of_unity: Vec<Self> =
-            iterate(Self::one(), |&v| v * <Self as FieldFFT>::root_of_unity())
+        let roots_of_unity: Vec<Self> = {
+            let mut root_of_unity = <Self as FieldFFT>::root_of_unity();
+            for _ in 0..(<Self as FieldFFT>::S - log_len) {
+                root_of_unity *= root_of_unity;
+            }
+            iterate(Self::one(), |&v| v * root_of_unity)
                 .take(gap)
-                .collect();
+                .collect()
+        };
 
         while gap > 0 {
             let nchunks = xi.len() / (2 * gap);
@@ -75,5 +83,13 @@ pub trait FieldFFT: ff::Field {
         }
 
         Ok(())
+    }
+}
+
+impl<T: ff::PrimeField> FieldFFT for T {
+    const S: u32 = <Self as ff::PrimeField>::S;
+
+    fn root_of_unity() -> Self {
+        <Self as ff::PrimeField>::root_of_unity()
     }
 }
