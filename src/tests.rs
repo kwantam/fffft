@@ -14,31 +14,11 @@ use ff::PrimeField;
 mod ft {
     use ff::PrimeField;
     #[derive(PrimeField)]
-    #[PrimeFieldModulus = "17"]
-    #[PrimeFieldGenerator = "3"]
-    #[PrimeFieldReprEndianness = "little"]
-    pub struct Ft([u64; 1]);
-}
-
-/*
-mod fr {
-    use ff::PrimeField;
-    #[derive(PrimeField)]
-    #[PrimeFieldModulus = "52435875175126190479447740508185965837690552500527637822603658699938581184513"]
-    #[PrimeFieldGenerator = "7"]
-    #[PrimeFieldReprEndianness = "little"]
-    pub struct Fr([u64; 4]);
-}
-
-mod ft2 {
-    use ff::PrimeField;
-    #[derive(PrimeField)]
     #[PrimeFieldModulus = "70386805592835581672624750593"]
     #[PrimeFieldGenerator = "17"]
     #[PrimeFieldReprEndianness = "little"]
     pub struct Ft([u64; 2]);
 }
-*/
 
 #[test]
 fn rug_check() {
@@ -57,10 +37,18 @@ fn rug_check() {
         .map(|x| Ft::from_str(&x.to_string_radix(10)).unwrap())
         .collect();
 
-    let p = 17.into();
+    let p = Integer::from_str_radix("70386805592835581672624750593", 10).unwrap();
     let w = {
-        let mut tmp: Integer = 3.into();
-        let mut lnd = 16 / rug_input.len();
+        // ```sage
+        // p = 70386805592835581672624750593
+        // assert 16388205250919699127 * 2^32 + 1 == p
+        // F = GF(p)
+        // pr = F.primitive_element()
+        // w = pr ^ 16388205250919699127
+        // assert w == F(48006014286678626680047775496)
+        // ```
+        let mut tmp = Integer::from_str_radix("48006014286678626680047775496", 10).unwrap();
+        let mut lnd = (1u64 << 32) / (rug_input.len() as u64);
         while lnd > 1 {
             tmp.square_mut();
             tmp %= &p;
@@ -97,7 +85,6 @@ fn roundtrip() {
         })
         .collect();
     let fi2 = fi.clone();
-    let log_len = super::get_log_len(&fi, <Ft as FieldFFT>::S).unwrap();
 
     // fft_ii tests
     Ft::fft_ii(&mut fi).unwrap();
@@ -105,18 +92,18 @@ fn roundtrip() {
     assert_eq!(fi, fi2);
 
     Ft::fft_ii(&mut fi).unwrap();
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     Ft::ifft_oi(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 
     Ft::fft_ii(&mut fi).unwrap();
     Ft::ifft_io(&mut fi).unwrap();
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 
     // fft_io tests
     Ft::fft_io(&mut fi).unwrap();
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     Ft::ifft_ii(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 
@@ -125,27 +112,27 @@ fn roundtrip() {
     assert_eq!(fi, fi2);
 
     Ft::fft_io(&mut fi).unwrap();
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     Ft::ifft_io(&mut fi).unwrap();
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 
     // fft_oi tests
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     Ft::fft_oi(&mut fi).unwrap();
     Ft::ifft_ii(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     Ft::fft_oi(&mut fi).unwrap();
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     Ft::ifft_oi(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     Ft::fft_oi(&mut fi).unwrap();
     Ft::ifft_io(&mut fi).unwrap();
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 }
 
@@ -166,7 +153,6 @@ fn rev_roundtrip() {
         })
         .collect();
     let fi2 = fi.clone();
-    let log_len = super::get_log_len(&fi, <Ft as FieldFFT>::S).unwrap();
 
     // ifft_ii tests
     Ft::ifft_ii(&mut fi).unwrap();
@@ -175,24 +161,24 @@ fn rev_roundtrip() {
 
     Ft::ifft_ii(&mut fi).unwrap();
     Ft::fft_io(&mut fi).unwrap();
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 
     Ft::ifft_ii(&mut fi).unwrap();
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     Ft::fft_oi(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 
     // ifft_io tests
     Ft::ifft_io(&mut fi).unwrap();
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     Ft::fft_ii(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 
     Ft::ifft_io(&mut fi).unwrap();
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     Ft::fft_io(&mut fi).unwrap();
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 
     Ft::ifft_io(&mut fi).unwrap();
@@ -200,20 +186,20 @@ fn rev_roundtrip() {
     assert_eq!(fi, fi2);
 
     // ifft_oi tests
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     Ft::ifft_oi(&mut fi).unwrap();
     Ft::fft_ii(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     Ft::ifft_oi(&mut fi).unwrap();
     Ft::fft_io(&mut fi).unwrap();
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     Ft::ifft_oi(&mut fi).unwrap();
-    super::derange(&mut fi, log_len);
+    Ft::derange(&mut fi).unwrap();
     Ft::fft_oi(&mut fi).unwrap();
     assert_eq!(fi, fi2);
 }

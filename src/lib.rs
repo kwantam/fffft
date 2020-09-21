@@ -72,6 +72,13 @@ pub trait FieldFFT: Field {
     fn ifft_oi<T: AsMut<[Self]>>(mut xi: T) -> Result<(), FFTError> {
         ifft_help(xi.as_mut(), FFTOrder::OI)
     }
+
+    /// turn in-order into out-of-order, or vice-versa
+    fn derange<T: AsMut<[Self]>>(mut xi: T) -> Result<(), FFTError> {
+        let log_len = get_log_len(xi.as_mut(), Self::S)?;
+        derange(xi.as_mut(), log_len);
+        Ok(())
+    }
 }
 
 impl<T: ff::PrimeField> FieldFFT for T {
