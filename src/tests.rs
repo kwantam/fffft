@@ -210,8 +210,16 @@ fn roots_of_unity() {
 
     for _ in 0..16 {
         let len = 10 + rand::random::<u32>() % 10;
-        let ret = super::roots_of_unity(<Ft as FieldFFT>::root_of_unity(), len, <Ft as FieldFFT>::S);
-        let (_, rfn) = super::rou_base(<Ft as FieldFFT>::root_of_unity(), len, len - 1, <Ft as FieldFFT>::S);
+        let ret =
+            super::roots_of_unity(<Ft as FieldFFT>::root_of_unity(), len, <Ft as FieldFFT>::S);
+        let (_, rfn) = super::rou_base(
+            <Ft as FieldFFT>::root_of_unity(),
+            len,
+            len - 1,
+            <Ft as FieldFFT>::S,
+        );
+        let ret2 = super::rec_rou(<Ft as FieldFFT>::root_of_unity(), len, <Ft as FieldFFT>::S);
         assert_eq!(ret, rfn);
+        assert_eq!(ret2, rfn);
     }
 }

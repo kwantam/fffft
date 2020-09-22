@@ -159,19 +159,25 @@ fn rou_base<T: Field>(mut root: T, log_len: u32, log_max: u32, rdeg: u32) -> (T,
     // at most log_len - 1
     assert!(log_max < log_len);
 
-    // compute log_len'th root of unity from rdeg'th root of unity, rdeg >= log_len
+    // compute 2^log_len'th root of unity from 2^rdeg'th root of unity, rdeg >= log_len
     for _ in 0..(rdeg - log_len) {
         root *= root;
     }
 
     // compute remaining roots of unity
-    (root, iterate(T::one(), |&v| v * root).take(1 << log_max).collect())
+    (
+        root,
+        iterate(T::one(), |&v| v * root)
+            .take(1 << log_max)
+            .collect(),
+    )
 }
+
+const LOG_MAX_SMPOW: u32 = 6; // XXX(how big?)
+const MAX_SMPOW: usize = 1 << LOG_MAX_SMPOW;
 
 fn roots_of_unity<T: Field>(root: T, log_len: u32, rdeg: u32) -> Vec<T> {
     use std::cmp::min;
-    const LOG_MAX_SMPOW: u32 = 8; // XXX(how big???)
-    const MAX_SMPOW: usize = 1 << LOG_MAX_SMPOW;
 
     // compute 2^log_len'th root of unity and small powers table
     let log_max = min(log_len - 1, LOG_MAX_SMPOW);
@@ -185,21 +191,76 @@ fn roots_of_unity<T: Field>(root: T, log_len: u32, rdeg: u32) -> Vec<T> {
     let base_root = *small_powers.last().unwrap() * root;
     // precompute power-of-two powers of the root of unity
     let max_pow = log_len - 1 - LOG_MAX_SMPOW;
-    let log_roots: Vec<T> = iterate(base_root, |&r| r * r).take(max_pow as usize).collect();
-    let mut ret = vec![T::one(); 1 << (log_len - 1)];
-    ret.par_chunks_mut(MAX_SMPOW).enumerate().for_each(|(idx, rt)| {
-        for off in 0..max_pow as usize {
-            let bit = idx & (1 << off);
-            if bit != 0 {
-                rt[0] *= log_roots[off];
+    let log_roots: Vec<T> = iterate(base_root, |&r| r * r)
+        .take(max_pow as usize)
+        .collect();
+    let mut ret = vec![T::default(); 1 << (log_len - 1)];
+    ret.par_chunks_mut(MAX_SMPOW)
+        .enumerate()
+        .for_each(|(idx, rt)| {
+            rt[0] = T::one();
+            for (off, root) in log_roots.iter().enumerate() {
+                let bit = idx & (1 << off);
+                if bit != 0 {
+                    rt[0] *= root;
+                }
             }
-        }
 
-        for jdx in 1..MAX_SMPOW {
-            rt[jdx] = rt[0] * small_powers[jdx];
-        }
-    });
+            for jdx in 1..MAX_SMPOW {
+                rt[jdx] = rt[0] * small_powers[jdx];
+            }
+        });
     ret
+}
+
+fn rec_rou<T: Field>(mut root: T, log_len: u32, rdeg: u32) -> Vec<T> {
+    if log_len - 1 <= LOG_MAX_SMPOW {
+        return rou_base(root, log_len, log_len - 1, rdeg).1;
+    }
+
+    // 2^log_len'th root of unity
+    for _ in 0..(rdeg - log_len) {
+        root *= root;
+    }
+    // w, w^2, w^4, w^8, ..., w^(2^(log_len - 1))
+    let log_roots: Vec<T> = iterate(root, |&r| r * r)
+        .take(log_len as usize - 1)
+        .collect();
+    let mut ret = vec![T::default(); 1 << (log_len - 1)];
+    rec_rou_help(ret.as_mut(), log_roots.as_ref());
+    ret
+}
+
+fn rec_rou_help<T: Field>(out: &mut [T], log_roots: &[T]) {
+    assert_eq!(out.len(), 1 << log_roots.len());
+
+    // base case: just compute the roots sequentially
+    if log_roots.len() <= LOG_MAX_SMPOW as usize {
+        out[0] = T::one();
+        for idx in 1..out.len() {
+            out[idx] = out[idx - 1] * log_roots[0];
+        }
+        return;
+    }
+
+    // recursive case:
+    // 1. split log_roots in half
+    let (lr_lo, lr_hi) = log_roots.split_at(log_roots.len() / 2);
+    let mut scr_lo = vec![T::default(); 1 << lr_lo.len()];
+    let mut scr_hi = vec![T::default(); 1 << lr_hi.len()];
+    // 2. compute each half individually
+    rayon::join(
+        || rec_rou_help(scr_lo.as_mut(), lr_lo),
+        || rec_rou_help(scr_hi.as_mut(), lr_hi),
+    );
+    // 3. recombine halves
+    out.par_chunks_mut(scr_lo.len())
+        .enumerate()
+        .for_each(|(idx, rt)| {
+            for jdx in 0..rt.len() {
+                rt[jdx] = scr_hi[idx] * scr_lo[jdx];
+            }
+        });
 }
 
 fn io_help<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
