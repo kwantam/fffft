@@ -13,6 +13,7 @@ repository = "https://github.com/kwantam/fffft"
 err-derive = "0.2"
 ff = "0.8"
 itertools = "0.9"
+rayon = "1.4"
 
 [dev-dependencies]
 bitvec = "0.18"

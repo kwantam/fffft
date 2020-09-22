@@ -69,7 +69,7 @@ fn rug_check() {
 }
 
 #[test]
-fn roundtrip() {
+fn sm_roundtrip() {
     use ft::*;
     use rand::seq::SliceRandom;
 
@@ -137,7 +137,7 @@ fn roundtrip() {
 }
 
 #[test]
-fn rev_roundtrip() {
+fn sm_rev_roundtrip() {
     use ft::*;
     use rand::seq::SliceRandom;
 
@@ -202,4 +202,16 @@ fn rev_roundtrip() {
     Ft::derange(&mut fi).unwrap();
     Ft::fft_oi(&mut fi).unwrap();
     assert_eq!(fi, fi2);
+}
+
+#[test]
+fn roots_of_unity() {
+    use ft::*;
+
+    for _ in 0..16 {
+        let len = 10 + rand::random::<u32>() % 10;
+        let ret = super::roots_of_unity(<Ft as FieldFFT>::root_of_unity(), len, <Ft as FieldFFT>::S);
+        let (_, rfn) = super::rou_base(<Ft as FieldFFT>::root_of_unity(), len, len - 1, <Ft as FieldFFT>::S);
+        assert_eq!(ret, rfn);
+    }
 }

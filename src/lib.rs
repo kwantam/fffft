@@ -16,6 +16,7 @@ for sequences of values that implement the [ff::PrimeField] trait.
 use err_derive::Error;
 use ff::Field;
 use itertools::iterate;
+use rayon::prelude::*;
 
 #[cfg(test)]
 mod tests;
@@ -154,16 +155,57 @@ fn get_log_len<T>(xi: &[T], s: u32) -> Result<u32, FFTError> {
     Ok(log_len)
 }
 
-fn io_help<T: Field>(xi: &mut [T], mut root: T, log_len: u32, rdeg: u32) {
-    // compute the needed roots of unity
-    let mut gap = xi.len() / 2;
-    let roots_of_unity: Vec<T> = {
-        for _ in 0..(rdeg - log_len) {
-            root *= root;
-        }
-        iterate(T::one(), |&v| v * root).take(gap).collect()
-    };
+fn rou_base<T: Field>(mut root: T, log_len: u32, log_max: u32, rdeg: u32) -> (T, Vec<T>) {
+    // at most log_len - 1
+    assert!(log_max < log_len);
 
+    // compute log_len'th root of unity from rdeg'th root of unity, rdeg >= log_len
+    for _ in 0..(rdeg - log_len) {
+        root *= root;
+    }
+
+    // compute remaining roots of unity
+    (root, iterate(T::one(), |&v| v * root).take(1 << log_max).collect())
+}
+
+fn roots_of_unity<T: Field>(root: T, log_len: u32, rdeg: u32) -> Vec<T> {
+    use std::cmp::min;
+    const LOG_MAX_SMPOW: u32 = 8; // XXX(how big???)
+    const MAX_SMPOW: usize = 1 << LOG_MAX_SMPOW;
+
+    // compute 2^log_len'th root of unity and small powers table
+    let log_max = min(log_len - 1, LOG_MAX_SMPOW);
+    let (root, small_powers) = rou_base(root, log_len, log_max, rdeg);
+    if log_max == log_len - 1 {
+        // early return for the easy case
+        return small_powers;
+    }
+
+    // this is the next root after the ones above
+    let base_root = *small_powers.last().unwrap() * root;
+    // precompute power-of-two powers of the root of unity
+    let max_pow = log_len - 1 - LOG_MAX_SMPOW;
+    let log_roots: Vec<T> = iterate(base_root, |&r| r * r).take(max_pow as usize).collect();
+    let mut ret = vec![T::one(); 1 << (log_len - 1)];
+    ret.par_chunks_mut(MAX_SMPOW).enumerate().for_each(|(idx, rt)| {
+        for off in 0..max_pow as usize {
+            let bit = idx & (1 << off);
+            if bit != 0 {
+                rt[0] *= log_roots[off];
+            }
+        }
+
+        for jdx in 1..MAX_SMPOW {
+            rt[jdx] = rt[0] * small_powers[jdx];
+        }
+    });
+    ret
+}
+
+fn io_help<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
+    let roots = roots_of_unity(root, log_len, rdeg);
+
+    let mut gap = xi.len() / 2;
     while gap > 0 {
         let nchunks = xi.len() / (2 * gap);
         for cidx in 0..nchunks {
@@ -171,23 +213,16 @@ fn io_help<T: Field>(xi: &mut [T], mut root: T, log_len: u32, rdeg: u32) {
             for idx in 0..gap {
                 let neg = xi[offset + idx] - xi[offset + idx + gap];
                 xi[offset + idx] += xi[offset + idx + gap];
-                xi[offset + idx + gap] = neg * roots_of_unity[nchunks * idx];
+                xi[offset + idx + gap] = neg * roots[nchunks * idx];
             }
         }
         gap /= 2;
     }
 }
 
-fn oi_help<T: Field>(xi: &mut [T], mut root: T, log_len: u32, rdeg: u32) {
+fn oi_help<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
     // needed roots of unity
-    let roots_of_unity: Vec<T> = {
-        for _ in 0..(rdeg - log_len) {
-            root *= root;
-        }
-        iterate(T::one(), |&v| v * root)
-            .take(xi.len() / 2)
-            .collect()
-    };
+    let roots = roots_of_unity(root, log_len, rdeg);
 
     let mut gap = 1;
     while gap < xi.len() {
@@ -195,7 +230,7 @@ fn oi_help<T: Field>(xi: &mut [T], mut root: T, log_len: u32, rdeg: u32) {
         for cidx in 0..nchunks {
             let offset = 2 * cidx * gap;
             for idx in 0..gap {
-                xi[offset + idx + gap] *= roots_of_unity[nchunks * idx];
+                xi[offset + idx + gap] *= roots[nchunks * idx];
                 let neg = xi[offset + idx] - xi[offset + idx + gap];
                 xi[offset + idx] += xi[offset + idx + gap];
                 xi[offset + idx + gap] = neg;
