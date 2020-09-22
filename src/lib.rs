@@ -155,83 +155,33 @@ fn get_log_len<T>(xi: &[T], s: u32) -> Result<u32, FFTError> {
     Ok(log_len)
 }
 
-fn rou_base<T: Field>(mut root: T, log_len: u32, log_max: u32, rdeg: u32) -> (T, Vec<T>) {
-    // at most log_len - 1
-    assert!(log_max < log_len);
-
-    // compute 2^log_len'th root of unity from 2^rdeg'th root of unity, rdeg >= log_len
-    for _ in 0..(rdeg - log_len) {
-        root *= root;
-    }
-
-    // compute remaining roots of unity
-    (
-        root,
-        iterate(T::one(), |&v| v * root)
-            .take(1 << log_max)
-            .collect(),
-    )
-}
-
 const LOG_MAX_SMPOW: u32 = 6; // XXX(how big?)
-const MAX_SMPOW: usize = 1 << LOG_MAX_SMPOW;
-
-fn roots_of_unity<T: Field>(root: T, log_len: u32, rdeg: u32) -> Vec<T> {
-    use std::cmp::min;
-
-    // compute 2^log_len'th root of unity and small powers table
-    let log_max = min(log_len - 1, LOG_MAX_SMPOW);
-    let (root, small_powers) = rou_base(root, log_len, log_max, rdeg);
-    if log_max == log_len - 1 {
-        // early return for the easy case
-        return small_powers;
-    }
-
-    // this is the next root after the ones above
-    let base_root = *small_powers.last().unwrap() * root;
-    // precompute power-of-two powers of the root of unity
-    let max_pow = log_len - 1 - LOG_MAX_SMPOW;
-    let log_roots: Vec<T> = iterate(base_root, |&r| r * r)
-        .take(max_pow as usize)
-        .collect();
-    let mut ret = vec![T::default(); 1 << (log_len - 1)];
-    ret.par_chunks_mut(MAX_SMPOW)
-        .enumerate()
-        .for_each(|(idx, rt)| {
-            rt[0] = T::one();
-            for (off, root) in log_roots.iter().enumerate() {
-                let bit = idx & (1 << off);
-                if bit != 0 {
-                    rt[0] *= root;
-                }
-            }
-
-            for jdx in 1..MAX_SMPOW {
-                rt[jdx] = rt[0] * small_powers[jdx];
-            }
-        });
-    ret
-}
-
-fn rec_rou<T: Field>(mut root: T, log_len: u32, rdeg: u32) -> Vec<T> {
-    if log_len - 1 <= LOG_MAX_SMPOW {
-        return rou_base(root, log_len, log_len - 1, rdeg).1;
-    }
-
+fn roots_of_unity<T: Field>(mut root: T, log_len: u32, rdeg: u32) -> Vec<T> {
     // 2^log_len'th root of unity
     for _ in 0..(rdeg - log_len) {
         root *= root;
     }
+
+    // early exit for short inputs
+    if log_len - 1 <= LOG_MAX_SMPOW {
+        return iterate(T::one(), |&v| v * root)
+            .take(1 << (log_len - 1))
+            .collect();
+    }
+
     // w, w^2, w^4, w^8, ..., w^(2^(log_len - 1))
     let log_roots: Vec<T> = iterate(root, |&r| r * r)
         .take(log_len as usize - 1)
         .collect();
+
+    // allocate the return array and start the recursion
     let mut ret = vec![T::default(); 1 << (log_len - 1)];
-    rec_rou_help(ret.as_mut(), log_roots.as_ref());
+    rou_rec(ret.as_mut(), log_roots.as_ref());
+
     ret
 }
 
-fn rec_rou_help<T: Field>(out: &mut [T], log_roots: &[T]) {
+fn rou_rec<T: Field>(out: &mut [T], log_roots: &[T]) {
     assert_eq!(out.len(), 1 << log_roots.len());
 
     // base case: just compute the roots sequentially
@@ -250,8 +200,8 @@ fn rec_rou_help<T: Field>(out: &mut [T], log_roots: &[T]) {
     let mut scr_hi = vec![T::default(); 1 << lr_hi.len()];
     // 2. compute each half individually
     rayon::join(
-        || rec_rou_help(scr_lo.as_mut(), lr_lo),
-        || rec_rou_help(scr_hi.as_mut(), lr_hi),
+        || rou_rec(scr_lo.as_mut(), lr_lo),
+        || rou_rec(scr_hi.as_mut(), lr_hi),
     );
     // 3. recombine halves
     out.par_chunks_mut(scr_lo.len())

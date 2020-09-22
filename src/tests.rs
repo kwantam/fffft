@@ -9,7 +9,7 @@
 
 use super::FieldFFT;
 
-use ff::PrimeField;
+use ff::{Field, PrimeField};
 
 mod ft {
     use ff::PrimeField;
@@ -207,19 +207,24 @@ fn sm_rev_roundtrip() {
 #[test]
 fn roots_of_unity() {
     use ft::*;
+    use itertools::iterate;
 
     for _ in 0..16 {
-        let len = 10 + rand::random::<u32>() % 10;
-        let ret =
-            super::roots_of_unity(<Ft as FieldFFT>::root_of_unity(), len, <Ft as FieldFFT>::S);
-        let (_, rfn) = super::rou_base(
-            <Ft as FieldFFT>::root_of_unity(),
-            len,
-            len - 1,
-            <Ft as FieldFFT>::S,
-        );
-        let ret2 = super::rec_rou(<Ft as FieldFFT>::root_of_unity(), len, <Ft as FieldFFT>::S);
+        let len = 10 + rand::random::<u32>() % 12;
+
+        // use parallel roots of unity computation
+        let mut root = <Ft as FieldFFT>::root_of_unity();
+        let s = <Ft as FieldFFT>::S;
+        let ret = super::roots_of_unity(root, len, s);
+
+        // compute naively
+        for _ in 0..(s - len) {
+            root *= root;
+        }
+        let rfn: Vec<Ft> = iterate(Ft::one(), |&v| v * root)
+            .take(1 << (len - 1))
+            .collect();
+
         assert_eq!(ret, rfn);
-        assert_eq!(ret2, rfn);
     }
 }
