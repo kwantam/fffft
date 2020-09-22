@@ -10,6 +10,8 @@
 use super::FieldFFT;
 
 use ff::{Field, PrimeField};
+#[cfg(feature = "bench")]
+use test::Bencher;
 
 mod ft {
     use ff::PrimeField;
@@ -227,4 +229,40 @@ fn roots_of_unity() {
 
         assert_eq!(ret, rfn);
     }
+}
+
+#[cfg(feature = "bench")]
+#[bench]
+fn roots_of_unity_serial(b: &mut Bencher) {
+    use ft::*;
+    use itertools::iterate;
+    use test::black_box;
+
+    let mut root = <Ft as FieldFFT>::root_of_unity();
+    let s = <Ft as FieldFFT>::S;
+    let len = 20;
+    for _ in 0..(s - len) {
+        root *= root;
+    }
+
+    b.iter(|| {
+        black_box(iterate(Ft::one(), |&v| v * root)
+                  .take(1 << (len - 1))
+                  .collect::<Vec<Ft>>());
+    });
+}
+
+#[cfg(feature = "bench")]
+#[bench]
+fn roots_of_unity_parallel(b: &mut Bencher) {
+    use ft::*;
+    use test::black_box;
+
+    let root = <Ft as FieldFFT>::root_of_unity();
+    let s = <Ft as FieldFFT>::S;
+    let len = 20;
+
+    b.iter(|| {
+        black_box(super::roots_of_unity(root, len, s));
+    });
 }

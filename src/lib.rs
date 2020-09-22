@@ -13,6 +13,10 @@ fffft is a finite-field fast Fourier transform implementation
 for sequences of values that implement the [ff::PrimeField] trait.
 */
 
+#![feature(test)]
+#[cfg(feature = "bench")]
+extern crate test;
+
 use err_derive::Error;
 use ff::Field;
 use itertools::iterate;
@@ -155,7 +159,7 @@ fn get_log_len<T>(xi: &[T], s: u32) -> Result<u32, FFTError> {
     Ok(log_len)
 }
 
-const LOG_MAX_SMPOW: u32 = 6; // XXX(how big?)
+const LOG_MAX_SMPOW: u32 = 6;
 fn roots_of_unity<T: Field>(mut root: T, log_len: u32, rdeg: u32) -> Vec<T> {
     // 2^log_len'th root of unity
     for _ in 0..(rdeg - log_len) {
@@ -195,7 +199,7 @@ fn rou_rec<T: Field>(out: &mut [T], log_roots: &[T]) {
 
     // recursive case:
     // 1. split log_roots in half
-    let (lr_lo, lr_hi) = log_roots.split_at(log_roots.len() / 2);
+    let (lr_lo, lr_hi) = log_roots.split_at((1 + log_roots.len()) / 2);
     let mut scr_lo = vec![T::default(); 1 << lr_lo.len()];
     let mut scr_hi = vec![T::default(); 1 << lr_hi.len()];
     // 2. compute each half individually
