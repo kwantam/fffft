@@ -246,9 +246,11 @@ fn roots_of_unity_serial(b: &mut Bencher) {
     }
 
     b.iter(|| {
-        black_box(iterate(Ft::one(), |&v| v * root)
-                  .take(1 << (len - 1))
-                  .collect::<Vec<Ft>>());
+        black_box(
+            iterate(Ft::one(), |&v| v * root)
+                .take(1 << (len - 1))
+                .collect::<Vec<Ft>>(),
+        );
     });
 }
 
