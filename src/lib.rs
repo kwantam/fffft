@@ -17,13 +17,15 @@ for sequences of values that implement the [ff::PrimeField] trait.
 #[cfg(feature = "bench")]
 extern crate test;
 
+#[cfg(all(test, feature = "bench"))]
+mod bench;
+#[cfg(any(test, feature = "bench"))]
+mod tests;
+
 use err_derive::Error;
 use ff::Field;
 use itertools::iterate;
 use rayon::prelude::*;
-
-#[cfg(test)]
-mod tests;
 
 /// Err variant from FFT functions
 #[derive(Debug, Error)]
@@ -159,7 +161,8 @@ fn get_log_len<T>(xi: &[T], s: u32) -> Result<u32, FFTError> {
     Ok(log_len)
 }
 
-const LOG_MAX_SMPOW: u32 = 6;
+// minimum size at which to parallelize.
+const LOG_PAR_LIMIT: u32 = 6;
 fn roots_of_unity<T: Field>(mut root: T, log_len: u32, rdeg: u32) -> Vec<T> {
     // 2^log_len'th root of unity
     for _ in 0..(rdeg - log_len) {
@@ -167,7 +170,7 @@ fn roots_of_unity<T: Field>(mut root: T, log_len: u32, rdeg: u32) -> Vec<T> {
     }
 
     // early exit for short inputs
-    if log_len - 1 <= LOG_MAX_SMPOW {
+    if log_len - 1 <= LOG_PAR_LIMIT {
         return iterate(T::one(), |&v| v * root)
             .take(1 << (log_len - 1))
             .collect();
@@ -189,7 +192,7 @@ fn rou_rec<T: Field>(out: &mut [T], log_roots: &[T]) {
     assert_eq!(out.len(), 1 << log_roots.len());
 
     // base case: just compute the roots sequentially
-    if log_roots.len() <= LOG_MAX_SMPOW as usize {
+    if log_roots.len() <= LOG_PAR_LIMIT as usize {
         out[0] = T::one();
         for idx in 1..out.len() {
             out[idx] = out[idx - 1] * log_roots[0];
@@ -217,8 +220,20 @@ fn rou_rec<T: Field>(out: &mut [T], log_roots: &[T]) {
         });
 }
 
-fn io_help<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
-    let roots = roots_of_unity(root, log_len, rdeg);
+#[cfg(any(test, feature = "bench"))]
+fn roots_of_unity_ser<T: Field>(mut root: T, log_len: u32, rdeg: u32) -> Vec<T> {
+    for _ in 0..(rdeg - log_len) {
+        root *= root;
+    }
+
+    iterate(T::one(), |&v| v * root)
+        .take(1 << (log_len - 1))
+        .collect()
+}
+
+#[cfg(feature = "bench")]
+fn io_help_ser<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
+    let roots = roots_of_unity_ser(root, log_len, rdeg);
 
     let mut gap = xi.len() / 2;
     while gap > 0 {
@@ -235,7 +250,30 @@ fn io_help<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
     }
 }
 
-fn oi_help<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
+fn io_help<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
+    let roots = roots_of_unity(root, log_len, rdeg);
+
+    let mut gap = xi.len() / 2;
+    while gap > 0 {
+        // each butterfly cluster uses 2*gap positions
+        let nchunks = xi.len() / (2 * gap);
+        xi.par_chunks_mut(2 * gap).for_each(|cxi| {
+            let (lo, hi) = cxi.split_at_mut(gap);
+            lo.par_iter_mut()
+                .zip(hi)
+                .enumerate()
+                .for_each(|(idx, (lo, hi))| {
+                    let neg = *lo - *hi;
+                    *lo += *hi;
+                    *hi = neg * roots[nchunks * idx];
+                });
+        });
+        gap /= 2;
+    }
+}
+
+#[cfg(feature = "bench")]
+fn oi_help_ser<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
     // needed roots of unity
     let roots = roots_of_unity(root, log_len, rdeg);
 
@@ -251,6 +289,29 @@ fn oi_help<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
                 xi[offset + idx + gap] = neg;
             }
         }
+        gap *= 2;
+    }
+}
+
+fn oi_help<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
+    // needed roots of unity
+    let roots = roots_of_unity(root, log_len, rdeg);
+
+    let mut gap = 1;
+    while gap < xi.len() {
+        let nchunks = xi.len() / (2 * gap);
+        xi.par_chunks_mut(2 * gap).for_each(|cxi| {
+            let (lo, hi) = cxi.split_at_mut(gap);
+            lo.par_iter_mut()
+                .zip(hi)
+                .enumerate()
+                .for_each(|(idx, (lo, hi))| {
+                    *hi *= roots[nchunks * idx];
+                    let neg = *lo - *hi;
+                    *lo += *hi;
+                    *hi = neg;
+                });
+        });
         gap *= 2;
     }
 }
