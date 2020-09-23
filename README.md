@@ -4,7 +4,16 @@
 [![Crates.io](https://img.shields.io/crates/v/fffft.svg)](https://crates.io/crates/fffft)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE-APACHE)
 
-FFT impl for [ff::Field](https://docs.rs/ff).
+Parallel FFT computation for [ff::Field] types via [rayon].
+
+Implementing the trait for other [ff::Field] types is very simple:
+define a constant `S` and a function `root_of_unity()` that returns a
+field element that is a 2^`S`th primitive roof of unity.
+This crate contains a blanket trait impl for [ff::PrimeField].
+
+[ff::Field]: https://docs.rs/ff
+[ff::PrimeField]: https://docs.rs/ff
+[rayon]: https://docs.rs/rayon
 
 ## license
 
