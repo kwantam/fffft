@@ -15,6 +15,10 @@ This crate contains a blanket trait impl for [ff::PrimeField].
 [ff::PrimeField]: https://docs.rs/ff
 [rayon]: https://docs.rs/rayon
 
+## changelog
+
+- 0.2.0: Dependency updates only. Bumps `ff` to 0.9, `rand` to 0.8, `rand_core` to 0.6, and `bitvec` to 0.20.
+
 ## license
 
     Copyright 2020 Riad S. Wahby
