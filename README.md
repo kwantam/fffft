@@ -19,6 +19,8 @@ This crate contains a blanket trait impl for [ff::PrimeField].
 
 - 0.2.0: Dependency updates only. Bumps `ff` to 0.9, `rand` to 0.8, `rand_core` to 0.6, and `bitvec` to 0.20.
 
+- 0.3.0: Dependency updates only. Bumps `ff` to 0.10, `bitvec` to 0.22.
+
 ## license
 
     Copyright 2020 Riad S. Wahby
