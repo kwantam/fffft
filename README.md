@@ -21,6 +21,8 @@ This crate contains a blanket trait impl for [ff::PrimeField].
 
 - 0.3.0: Dependency updates only. Bumps `ff` to 0.10, `bitvec` to 0.22.
 
+- 0.4.0: Update deps. Add new functions that use precomputed roots of unity.
+
 ## license
 
     Copyright 2020 Riad S. Wahby
