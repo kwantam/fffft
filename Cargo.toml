@@ -1,6 +1,6 @@
 [package]
 name = "fffft"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["kwantam <kwantam@gmail.com>"]
 edition = "2018"
 description = "Number theoretic transform for PrimeField types (from ff crate)"
@@ -12,8 +12,8 @@ repository = "https://github.com/kwantam/fffft"
 [dependencies]
 err-derive = "0.2"
 ff = "0.10"
-itertools = "0.9"
-rayon = "1.4"
+itertools = "0.10"
+rayon = "1.5"
 
 [dev-dependencies]
 bitvec = "0.22"
