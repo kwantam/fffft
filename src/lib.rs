@@ -51,12 +51,26 @@ pub struct FFTPrecomp<T> {
     rou: Vec<T>,
 }
 
+impl<T> FFTPrecomp<T> {
+    /// Return log_len for this data
+    pub fn get_log_len(&self) -> u32 {
+        self.log_len
+    }
+}
+
 /// Precomputed IFFT data (for use with ifft_*_pc variants)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IFFTPrecomp<T> {
     log_len: u32,
     irou: Vec<T>,
     ninv: T,
+}
+
+impl<T> IFFTPrecomp<T> {
+    /// Return log_len for this data
+    pub fn get_log_len(&self) -> u32 {
+        self.log_len
+    }
 }
 
 /// a field that supports an FFT
