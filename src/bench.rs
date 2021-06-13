@@ -39,27 +39,28 @@ where
 
 #[bench]
 fn io_help_ser(b: &mut Bencher) {
-    fft_bench(b, super::io_help_ser);
+    fft_bench(b, super::io_help_ser, super::roots_of_unity_ser);
 }
 
 #[bench]
 fn io_help_par(b: &mut Bencher) {
-    fft_bench(b, super::io_help);
+    fft_bench(b, super::io_help, super::roots_of_unity);
 }
 
 #[bench]
 fn oi_help_ser(b: &mut Bencher) {
-    fft_bench(b, super::oi_help_ser);
+    fft_bench(b, super::oi_help_ser, super::roots_of_unity_ser);
 }
 
 #[bench]
 fn oi_help_par(b: &mut Bencher) {
-    fft_bench(b, super::oi_help);
+    fft_bench(b, super::oi_help, super::roots_of_unity);
 }
 
-fn fft_bench<F>(b: &mut Bencher, mut f: F)
+fn fft_bench<F, Fr>(b: &mut Bencher, mut f: F, mut r: Fr)
 where
-    F: FnMut(&mut [Ft], Ft, u32, u32),
+    F: FnMut(&mut [Ft], &[Ft]),
+    Fr: FnMut(Ft, u32, u32) -> Vec<Ft>,
 {
     use std::iter::repeat_with;
 
@@ -71,6 +72,46 @@ where
     let s = <Ft as FieldFFT>::S;
 
     b.iter(|| {
-        f(xi.as_mut(), root, LOG_BENCH_SIZE as u32, s);
+        let roots = r(root, LOG_BENCH_SIZE as u32, s);
+        f(xi.as_mut(), &roots[..]);
+    });
+}
+
+#[bench]
+fn io_help_pc_ser(b: &mut Bencher) {
+    fft_bench_pc(b, super::io_help_ser);
+}
+
+#[bench]
+fn io_help_pc_par(b: &mut Bencher) {
+    fft_bench_pc(b, super::io_help);
+}
+
+#[bench]
+fn oi_help_pc_ser(b: &mut Bencher) {
+    fft_bench_pc(b, super::oi_help_ser);
+}
+
+#[bench]
+fn oi_help_pc_par(b: &mut Bencher) {
+    fft_bench_pc(b, super::oi_help);
+}
+
+fn fft_bench_pc<F>(b: &mut Bencher, mut f: F)
+where
+    F: FnMut(&mut [Ft], &[Ft]),
+{
+    use std::iter::repeat_with;
+
+    let mut rng = rand::thread_rng();
+    let mut xi: Vec<Ft> = repeat_with(|| Ft::random(&mut rng))
+        .take(1 << LOG_BENCH_SIZE)
+        .collect();
+    let root = <Ft as FieldFFT>::root_of_unity();
+    let s = <Ft as FieldFFT>::S;
+    let roots = super::roots_of_unity(root, LOG_BENCH_SIZE as u32, s);
+
+    b.iter(|| {
+        f(xi.as_mut(), &roots[..]);
     });
 }

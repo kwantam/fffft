@@ -36,9 +36,27 @@ pub enum FFTError {
     /// Unsupported FFT length for this field
     #[error(display = "Input length greater than 2-adicity of field")]
     TooBig,
+    /// Precomputed data has wrong size for this input
+    #[error(display = "Precomputed data has wrong size for this input")]
+    WrongSizePrecomp,
     /// Unknown error
     #[error(display = "unknown")]
     Unknown,
+}
+
+/// Precomputed FFT data (for use with fft_*_pc variants)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FFTPrecomp<T> {
+    log_len: u32,
+    rou: Vec<T>,
+}
+
+/// Precomputed IFFT data (for use with ifft_*_pc variants)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IFFTPrecomp<T> {
+    log_len: u32,
+    irou: Vec<T>,
+    ninv: T,
 }
 
 /// a field that supports an FFT
@@ -49,6 +67,31 @@ pub trait FieldFFT: Field {
 
     /// Returns a 2^S'th root of unity.
     fn root_of_unity() -> Self;
+
+    /// Generate precomputed data for FFT of length `len`
+    fn precomp_fft(len: usize) -> Result<FFTPrecomp<Self>, FFTError> {
+        fft_precomp(len)
+    }
+
+    /// Generate precomputed data for IFFT of length `len`
+    fn precomp_ifft(len: usize) -> Result<IFFTPrecomp<Self>, FFTError> {
+        ifft_precomp(len)
+    }
+
+    /// fft: in-order input, in-order result using precomputed roots of unity
+    fn fft_ii_pc<T: AsMut<[Self]>>(mut xi: T, pc: &FFTPrecomp<Self>) -> Result<(), FFTError> {
+        fft_help_pc(xi.as_mut(), pc.log_len, &pc.rou[..], FFTOrder::II)
+    }
+
+    /// fft: in-order input, out-of-order result using precomputed roots of unity
+    fn fft_io_pc<T: AsMut<[Self]>>(mut xi: T, pc: &FFTPrecomp<Self>) -> Result<(), FFTError> {
+        fft_help_pc(xi.as_mut(), pc.log_len, &pc.rou[..], FFTOrder::IO)
+    }
+
+    /// fft: out-of-order input, in-order result using precomputed roots of unity
+    fn fft_oi_pc<T: AsMut<[Self]>>(mut xi: T, pc: &FFTPrecomp<Self>) -> Result<(), FFTError> {
+        fft_help_pc(xi.as_mut(), pc.log_len, &pc.rou[..], FFTOrder::OI)
+    }
 
     /// fft: in-order input, in-order result
     fn fft_ii<T: AsMut<[Self]>>(mut xi: T) -> Result<(), FFTError> {
@@ -63,6 +106,39 @@ pub trait FieldFFT: Field {
     /// fft: out-of-order input, in-order result
     fn fft_oi<T: AsMut<[Self]>>(mut xi: T) -> Result<(), FFTError> {
         fft_help(xi.as_mut(), FFTOrder::OI)
+    }
+
+    /// ifft: in-order input, in-order result using precomputed roots of unity
+    fn ifft_ii_pc<T: AsMut<[Self]>>(mut xi: T, pc: &IFFTPrecomp<Self>) -> Result<(), FFTError> {
+        ifft_help_pc(
+            xi.as_mut(),
+            pc.log_len,
+            &pc.irou[..],
+            &pc.ninv,
+            FFTOrder::II,
+        )
+    }
+
+    /// ifft: in-order input, out-of-order result using precomputed roots of unity
+    fn ifft_io_pc<T: AsMut<[Self]>>(mut xi: T, pc: &IFFTPrecomp<Self>) -> Result<(), FFTError> {
+        ifft_help_pc(
+            xi.as_mut(),
+            pc.log_len,
+            &pc.irou[..],
+            &pc.ninv,
+            FFTOrder::IO,
+        )
+    }
+
+    /// ifft: out-of-order input, in-order result using precomputed roots of unity
+    fn ifft_oi_pc<T: AsMut<[Self]>>(mut xi: T, pc: &IFFTPrecomp<Self>) -> Result<(), FFTError> {
+        ifft_help_pc(
+            xi.as_mut(),
+            pc.log_len,
+            &pc.irou[..],
+            &pc.ninv,
+            FFTOrder::OI,
+        )
     }
 
     /// ifft: in-order input, in-order result
@@ -82,7 +158,7 @@ pub trait FieldFFT: Field {
 
     /// turn in-order into out-of-order, or vice-versa
     fn derange<T: AsMut<[Self]>>(mut xi: T) -> Result<(), FFTError> {
-        let log_len = get_log_len(xi.as_mut(), Self::S)?;
+        let log_len = get_log_len(xi.as_mut().len(), Self::S)?;
         derange(xi.as_mut(), log_len);
         Ok(())
     }
@@ -96,6 +172,23 @@ impl<T: ff::PrimeField> FieldFFT for T {
     }
 }
 
+fn fft_precomp<T: FieldFFT>(len: usize) -> Result<FFTPrecomp<T>, FFTError> {
+    let log_len = get_log_len(len, T::S)?;
+    let rou = roots_of_unity(T::root_of_unity(), log_len, T::S);
+    Ok(FFTPrecomp { log_len, rou })
+}
+
+fn ifft_precomp<T: FieldFFT>(len: usize) -> Result<IFFTPrecomp<T>, FFTError> {
+    let log_len = get_log_len(len, T::S)?;
+    let irou = roots_of_unity(T::root_of_unity().invert().unwrap(), log_len, T::S);
+    let ninv = n_inv(log_len);
+    Ok(IFFTPrecomp {
+        log_len,
+        irou,
+        ninv,
+    })
+}
+
 #[derive(PartialEq, Eq, Debug)]
 enum FFTOrder {
     II,
@@ -103,16 +196,22 @@ enum FFTOrder {
     OI,
 }
 
-fn fft_help<T: FieldFFT>(xi: &mut [T], ord: FFTOrder) -> Result<(), FFTError> {
+fn fft_help_pc<T: FieldFFT>(
+    xi: &mut [T],
+    log_len: u32,
+    rou: &[T],
+    ord: FFTOrder,
+) -> Result<(), FFTError> {
     use FFTOrder::*;
 
-    let log_len = get_log_len(xi, T::S)?;
-    let root_of_unity = T::root_of_unity();
+    if xi.len() != (1 << log_len) {
+        return Err(FFTError::WrongSizePrecomp);
+    }
 
     if ord == OI {
-        oi_help(xi, root_of_unity, log_len, T::S);
+        oi_help(xi, rou);
     } else {
-        io_help(xi, root_of_unity, log_len, T::S);
+        io_help(xi, rou);
     }
 
     if ord == II {
@@ -122,35 +221,54 @@ fn fft_help<T: FieldFFT>(xi: &mut [T], ord: FFTOrder) -> Result<(), FFTError> {
     Ok(())
 }
 
-fn ifft_help<T: FieldFFT>(xi: &mut [T], ord: FFTOrder) -> Result<(), FFTError> {
+fn fft_help<T: FieldFFT>(xi: &mut [T], ord: FFTOrder) -> Result<(), FFTError> {
+    let pc = T::precomp_fft(xi.len())?;
+    fft_help_pc(xi, pc.log_len, &pc.rou[..], ord)
+}
+
+fn ifft_help_pc<T: FieldFFT>(
+    xi: &mut [T],
+    log_len: u32,
+    irou: &[T],
+    ninv: &T,
+    ord: FFTOrder,
+) -> Result<(), FFTError> {
     use FFTOrder::*;
 
-    let log_len = get_log_len(xi, T::S)?;
-    let root_of_unity = T::root_of_unity().invert().unwrap();
+    if xi.len() != (1 << log_len) {
+        return Err(FFTError::WrongSizePrecomp);
+    }
 
     if ord == II {
         derange(xi, log_len);
     }
 
     if ord == IO {
-        io_help(xi, root_of_unity, log_len, T::S);
+        io_help(xi, irou);
     } else {
-        oi_help(xi, root_of_unity, log_len, T::S);
+        oi_help(xi, irou);
     }
 
-    divide_by_n(xi, log_len);
+    for x in xi {
+        x.mul_assign(ninv);
+    }
     Ok(())
 }
 
-fn get_log_len<T>(xi: &[T], s: u32) -> Result<u32, FFTError> {
+fn ifft_help<T: FieldFFT>(xi: &mut [T], ord: FFTOrder) -> Result<(), FFTError> {
+    let pc = T::precomp_ifft(xi.len())?;
+    ifft_help_pc(xi, pc.log_len, &pc.irou[..], &pc.ninv, ord)
+}
+
+fn get_log_len(len: usize, s: u32) -> Result<u32, FFTError> {
     use FFTError::*;
 
-    if !xi.len().is_power_of_two() {
+    if !len.is_power_of_two() {
         return Err(NotPowerOfTwo);
     }
 
-    let log_len = 63 - (xi.len() as u64).leading_zeros();
-    if (1 << log_len) != xi.len() {
+    let log_len = 63 - (len as u64).leading_zeros();
+    if (1 << log_len) != len {
         return Err(Unknown);
     }
 
@@ -232,9 +350,7 @@ fn roots_of_unity_ser<T: Field>(mut root: T, log_len: u32, rdeg: u32) -> Vec<T> 
 }
 
 #[cfg(feature = "bench")]
-fn io_help_ser<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
-    let roots = roots_of_unity_ser(root, log_len, rdeg);
-
+fn io_help_ser<T: Field>(xi: &mut [T], roots: &[T]) {
     let mut gap = xi.len() / 2;
     while gap > 0 {
         let nchunks = xi.len() / (2 * gap);
@@ -250,9 +366,7 @@ fn io_help_ser<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
     }
 }
 
-fn io_help<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
-    let roots = roots_of_unity(root, log_len, rdeg);
-
+fn io_help<T: Field>(xi: &mut [T], roots: &[T]) {
     let mut gap = xi.len() / 2;
     while gap > 0 {
         // each butterfly cluster uses 2*gap positions
@@ -273,10 +387,7 @@ fn io_help<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
 }
 
 #[cfg(feature = "bench")]
-fn oi_help_ser<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
-    // needed roots of unity
-    let roots = roots_of_unity(root, log_len, rdeg);
-
+fn oi_help_ser<T: Field>(xi: &mut [T], roots: &[T]) {
     let mut gap = 1;
     while gap < xi.len() {
         let nchunks = xi.len() / (2 * gap);
@@ -293,10 +404,7 @@ fn oi_help_ser<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
     }
 }
 
-fn oi_help<T: Field>(xi: &mut [T], root: T, log_len: u32, rdeg: u32) {
-    // needed roots of unity
-    let roots = roots_of_unity(root, log_len, rdeg);
-
+fn oi_help<T: Field>(xi: &mut [T], roots: &[T]) {
     let mut gap = 1;
     while gap < xi.len() {
         let nchunks = xi.len() / (2 * gap);
@@ -329,16 +437,10 @@ fn derange<T>(xi: &mut [T], log_len: u32) {
     }
 }
 
-fn divide_by_n<T: Field>(xi: &mut [T], log_len: u32) {
-    let n_inv = {
-        let mut tmp = <T as Field>::one();
-        // hack: compute n :: T
-        for _ in 0..log_len {
-            tmp = tmp.double();
-        }
-        tmp.invert().unwrap()
-    };
-    for x in xi {
-        x.mul_assign(&n_inv);
+fn n_inv<T: Field>(log_len: u32) -> T {
+    let mut tmp = <T as Field>::one();
+    for _ in 0..log_len {
+        tmp = tmp.double();
     }
+    tmp.invert().unwrap()
 }
