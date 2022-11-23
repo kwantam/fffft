@@ -33,7 +33,7 @@ fn rug_fft() {
         let mut rug_input: Vec<Integer> = input.into_iter().map(Integer::from).collect();
         let mut input: Vec<Ft> = rug_input
             .iter()
-            .map(|x| Ft::from_str(&x.to_string_radix(10)).unwrap())
+            .map(|x| Ft::from_str_vartime(&x.to_string_radix(10)).unwrap())
             .collect();
 
         let p = Integer::from_str_radix("70386805592835581672624750593", 10).unwrap();
@@ -61,7 +61,7 @@ fn rug_fft() {
 
         let rug_output: Vec<Ft> = rug_input
             .iter()
-            .map(|x| Ft::from_str(&x.to_string_radix(10)).unwrap())
+            .map(|x| Ft::from_str_vartime(&x.to_string_radix(10)).unwrap())
             .collect();
         assert_eq!(rug_output, input);
     }
@@ -78,7 +78,7 @@ fn rug_ifft() {
         let mut rug_input: Vec<Integer> = input.into_iter().map(Integer::from).collect();
         let mut input: Vec<Ft> = rug_input
             .iter()
-            .map(|x| Ft::from_str(&x.to_string_radix(10)).unwrap())
+            .map(|x| Ft::from_str_vartime(&x.to_string_radix(10)).unwrap())
             .collect();
 
         let p = Integer::from_str_radix("70386805592835581672624750593", 10).unwrap();
@@ -106,7 +106,7 @@ fn rug_ifft() {
 
         let rug_output: Vec<Ft> = rug_input
             .iter()
-            .map(|x| Ft::from_str(&x.to_string_radix(10)).unwrap())
+            .map(|x| Ft::from_str_vartime(&x.to_string_radix(10)).unwrap())
             .collect();
         assert_eq!(rug_output, input);
     }
