@@ -25,6 +25,8 @@ This crate contains a blanket trait impl for [ff::PrimeField].
 
 - 0.4.1: Update deps.
 
+- 0.4.2: Update `ff` to 0.13, no API changes.
+
 ## license
 
     Copyright 2020 Riad S. Wahby
