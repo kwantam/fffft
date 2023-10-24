@@ -303,7 +303,7 @@ fn roots_of_unity<T: Field>(mut root: T, log_len: u32, rdeg: u32) -> Vec<T> {
 
     // early exit for short inputs
     if log_len - 1 <= LOG_PAR_LIMIT {
-        return iterate(T::ONE.clone(), |&v| v * root)
+        return iterate(T::ONE, |&v| v * root)
             .take(1 << (log_len - 1))
             .collect();
     }
@@ -325,7 +325,7 @@ fn rou_rec<T: Field>(out: &mut [T], log_roots: &[T]) {
 
     // base case: just compute the roots sequentially
     if log_roots.len() <= LOG_PAR_LIMIT as usize {
-        out[0] = T::ONE.clone();
+        out[0] = T::ONE;
         for idx in 1..out.len() {
             out[idx] = out[idx - 1] * log_roots[0];
         }
@@ -358,7 +358,7 @@ fn roots_of_unity_ser<T: Field>(mut root: T, log_len: u32, rdeg: u32) -> Vec<T> 
         root *= root;
     }
 
-    iterate(T::ONE.clone(), |&v| v * root)
+    iterate(T::ONE, |&v| v * root)
         .take(1 << (log_len - 1))
         .collect()
 }
