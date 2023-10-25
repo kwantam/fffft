@@ -182,7 +182,7 @@ impl<T: ff::PrimeField> FieldFFT for T {
     const S: u32 = <Self as ff::PrimeField>::S;
 
     fn root_of_unity() -> Self {
-        <Self as ff::PrimeField>::root_of_unity()
+        <Self as ff::PrimeField>::ROOT_OF_UNITY
     }
 }
 
@@ -303,7 +303,7 @@ fn roots_of_unity<T: Field>(mut root: T, log_len: u32, rdeg: u32) -> Vec<T> {
 
     // early exit for short inputs
     if log_len - 1 <= LOG_PAR_LIMIT {
-        return iterate(T::one(), |&v| v * root)
+        return iterate(T::ONE, |&v| v * root)
             .take(1 << (log_len - 1))
             .collect();
     }
@@ -325,7 +325,7 @@ fn rou_rec<T: Field>(out: &mut [T], log_roots: &[T]) {
 
     // base case: just compute the roots sequentially
     if log_roots.len() <= LOG_PAR_LIMIT as usize {
-        out[0] = T::one();
+        out[0] = T::ONE;
         for idx in 1..out.len() {
             out[idx] = out[idx - 1] * log_roots[0];
         }
@@ -358,7 +358,7 @@ fn roots_of_unity_ser<T: Field>(mut root: T, log_len: u32, rdeg: u32) -> Vec<T> 
         root *= root;
     }
 
-    iterate(T::one(), |&v| v * root)
+    iterate(T::ONE, |&v| v * root)
         .take(1 << (log_len - 1))
         .collect()
 }
@@ -452,7 +452,7 @@ fn derange<T>(xi: &mut [T], log_len: u32) {
 }
 
 fn n_inv<T: Field>(log_len: u32) -> T {
-    let mut tmp = <T as Field>::one();
+    let mut tmp = <T as Field>::ONE;
     for _ in 0..log_len {
         tmp = tmp.double();
     }
