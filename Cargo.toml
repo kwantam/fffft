@@ -1,6 +1,6 @@
 [package]
 name = "fffft"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["kwantam <kwantam@gmail.com>"]
 edition = "2018"
 description = "Number theoretic transform for PrimeField types (from ff crate)"
