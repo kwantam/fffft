@@ -23,7 +23,7 @@ This crate contains a blanket trait impl for [ff::PrimeField].
 
 - 0.4.0: Update deps. Add new functions that use precomputed roots of unity.
 
-- 0.4.1: Update deps.
+- 0.5.0: Update deps (`ff` 0.10 => 0.13; `bitvec` 0.22 => 1.0.1)
 
 ## license
 
