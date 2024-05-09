@@ -7,19 +7,19 @@
 // This file may not be copied, modified, or distributed
 // except according to those terms.
 #![deny(missing_docs)]
+#![cfg_attr(all(test, feature = "bench"), feature(test))]
 
 /*!
 fffft is a finite-field fast Fourier transform implementation
 for sequences of values that implement the [ff::PrimeField] trait.
 */
 
-#![feature(test)]
-#[cfg(feature = "bench")]
+#[cfg(all(test, feature = "bench"))]
 extern crate test;
 
 #[cfg(all(test, feature = "bench"))]
 mod bench;
-#[cfg(any(test, feature = "bench"))]
+#[cfg(test)]
 mod tests;
 
 use err_derive::Error;
@@ -352,7 +352,7 @@ fn rou_rec<T: Field>(out: &mut [T], log_roots: &[T]) {
         });
 }
 
-#[cfg(any(test, feature = "bench"))]
+#[cfg(test)]
 fn roots_of_unity_ser<T: Field>(mut root: T, log_len: u32, rdeg: u32) -> Vec<T> {
     for _ in 0..(rdeg - log_len) {
         root *= root;
@@ -363,7 +363,7 @@ fn roots_of_unity_ser<T: Field>(mut root: T, log_len: u32, rdeg: u32) -> Vec<T> 
         .collect()
 }
 
-#[cfg(feature = "bench")]
+#[cfg(all(test, feature = "bench"))]
 fn io_help_ser<T: Field>(xi: &mut [T], roots: &[T]) {
     let mut gap = xi.len() / 2;
     while gap > 0 {
@@ -400,7 +400,7 @@ fn io_help<T: Field>(xi: &mut [T], roots: &[T]) {
     }
 }
 
-#[cfg(feature = "bench")]
+#[cfg(all(test, feature = "bench"))]
 fn oi_help_ser<T: Field>(xi: &mut [T], roots: &[T]) {
     let mut gap = 1;
     while gap < xi.len() {
